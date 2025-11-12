@@ -127,7 +127,7 @@
                 <span id="target-letter-display" class="text-4xl font-['Fredoka_One'] text-pink-600 font-bold animate-pulse">L</span>
             </div>
             
-            <div id="slots-container" class="flex gap-2 md:gap-4 justify-center items-center flex-wrap px-2">
+            <div id="slots-container" class="flex gap-2 md:gap-4 justify-center items-center flex-nowrap px-2">
                 <!-- Slots (agora dinâmicos) -->
             </div>
         </div>
@@ -241,10 +241,70 @@
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
             
-            setTimeout(() => {
-                resetGame(true); // Começa com o nome padrão
-                speak("Onde está a letra L?");
-            }, 200);
+            // Garante que o layout foi pintado ANTES de medir a play-area
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    resetGame(true); // Começa com o nome padrão
+                    speak("Onde está a letra L?");
+                });
+            });
+        }
+
+        // NOVA FUNÇÃO: Encontra uma posição segura (anti-sobreposição)
+        function findSafePosition(placedRects, containerRect, elSize) {
+            const margin = 10;
+            const maxX = containerRect.width - elSize - margin;
+            const maxY = containerRect.height - elSize - margin;
+
+            let newRect;
+            let isOverlapping = true;
+            let attempts = 0;
+
+            while (isOverlapping && attempts < 50) {
+                attempts++;
+                const x = Math.floor(Math.random() * (maxX > 0 ? maxX : 1)) + margin/2;
+                const y = Math.floor(Math.random() * (maxY > 0 ? maxY : 1)) + margin/2;
+                
+                newRect = { x, y, width: elSize, height: elSize };
+                
+                isOverlapping = false;
+                for (const rect of placedRects) {
+                    if (isOverlappingRects(newRect, rect, 10)) { // 10px de padding
+                        isOverlapping = true;
+                        break;
+                    }
+                }
+            }
+            // Pode retornar undefined se falhar 50x, mas é raro
+            if (attempts >= 50) { 
+                console.warn("Não foi possível encontrar posição segura. Pode sobrepor.");
+                if (!newRect) newRect = { x: margin, y: margin, width: elSize, height: elSize }; // Fallback
+            }
+            return newRect; // Retorna { x, y, width, height }
+        }
+
+        // NOVA FUNÇÃO: Reposiciona bolhas existentes (ex: ao girar a tela)
+        function repositionBubbles() {
+            const playArea = document.getElementById('play-area');
+            if (!playArea) return;
+            
+            const containerRect = playArea.getBoundingClientRect();
+            if (containerRect.width === 0 || containerRect.height === 0) return; // Não faz nada se área não for visível
+
+            const bubbles = document.querySelectorAll('.letter-bubble');
+            const placedRects = [];
+            const elSize = window.innerWidth < 640 ? 65 : 100;
+
+            bubbles.forEach(bubble => {
+                // Encontra uma nova posição segura
+                const newRect = findSafePosition(placedRects, containerRect, elSize);
+                if (newRect) {
+                    placedRects.push(newRect);
+                    // Aplica a nova posição
+                    bubble.style.left = `${newRect.x}px`;
+                    bubble.style.top = `${newRect.y}px`;
+                }
+            });
         }
 
         function resetGame(useDefaultName = false) {
@@ -267,8 +327,8 @@
             targetName.forEach((char, index) => {
                 const slot = document.createElement('div');
                 slot.id = `slot-${index}`;
-                // Tamanhos responsivos
-                slot.className = `letter-slot w-11 h-14 md:w-16 md:h-20 border-4 border-dashed border-gray-400 rounded-xl flex items-center justify-center text-3xl md:text-5xl text-gray-400`;
+                // Tamanhos responsivos (w-10 é 2.5rem, menor que w-11)
+                slot.className = `letter-slot w-10 h-14 md:w-16 md:h-20 border-4 border-dashed border-gray-400 rounded-xl flex items-center justify-center text-3xl md:text-5xl text-gray-400`;
                 slotsContainer.appendChild(slot);
             });
 
@@ -290,25 +350,7 @@
             lettersData.forEach((item) => {
                 
                 // Encontra uma posição que não sobreponha
-                let newRect;
-                let isOverlapping = true;
-                let attempts = 0;
-
-                while (isOverlapping && attempts < 50) { // Tenta 50x
-                    attempts++;
-                    const x = Math.floor(Math.random() * (maxX > 0 ? maxX : 1)) + margin/2;
-                    const y = Math.floor(Math.random() * (maxY > 0 ? maxY : 1)) + margin/2;
-                    
-                    newRect = { x, y, width: elSize, height: elSize };
-                    
-                    isOverlapping = false; // Assume que está bom
-                    for (const rect of placedRects) {
-                        if (isOverlappingRects(newRect, rect, 10)) { // 10px de padding
-                            isOverlapping = true;
-                            break;
-                        }
-                    }
-                }
+                const newRect = findSafePosition(placedRects, containerRect, elSize);
                 placedRects.push(newRect);
 
                 const bubble = document.createElement('div');
@@ -448,10 +490,9 @@
         }
 
         window.addEventListener('resize', () => {
-            const bubbles = document.querySelectorAll('.letter-bubble');
-            const playArea = document.getElementById('play-area');
-            if(playArea && !document.getElementById('gameArea').classList.contains('hidden')) {
-                 bubbles.forEach(b => setRandomPosition(b, playArea));
+            // Chama a nova função de reposicionamento
+            if (!document.getElementById('gameArea').classList.contains('hidden')) {
+                 repositionBubbles(); 
             }
         });
 
