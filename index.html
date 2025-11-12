@@ -100,7 +100,8 @@
         }
     </style>
 </head>
-<body class="h-screen w-screen flex flex-col items-center justify-center">
+<!-- MUDANÇA: h-screen para h-[100dvh] (Dynamic Viewport Height) -->
+<body class="h-[100dvh] w-screen flex flex-col items-center justify-center">
 
     <!-- Tela Inicial -->
     <div id="startScreen" class="absolute inset-0 z-50 bg-white/90 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center">
@@ -115,14 +116,13 @@
         </button>
     </div>
 
-    <!-- Área do Jogo -->
+    <!-- Área do Jogo (h-full agora preenche h-[100dvh] do body) -->
     <div id="gameArea" class="w-full h-full flex flex-col hidden relative">
         
         <!-- Cabeçalho -->
         <div class="flex-none pt-8 pb-4 px-2 flex flex-col items-center z-30 bg-white/30 backdrop-blur-sm rounded-b-3xl shadow-sm mx-4 mt-2">
             <div class="flex items-center gap-2 mb-4 bg-white px-4 py-2 rounded-full shadow-sm">
                 <span class="text-gray-500 font-bold">Procure o:</span>
-                <!-- ADICIONADO ELEMENTO EMOJI -->
                 <span id="target-emoji-display" class="text-3xl">👧🏻</span>
                 <span id="target-letter-display" class="text-4xl font-['Fredoka_One'] text-pink-600 font-bold animate-pulse">L</span>
             </div>
@@ -145,7 +145,7 @@
         <div id="winScreen" class="hidden absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
             <h2 class="text-6xl md:text-8xl mb-8 animate-bounce">🎉</h2>
         <div class="bg-white p-8 rounded-3xl shadow-2xl">
-            <div id="winEmojiDisplay" class="text-6xl mb-4">🎉</div> <!-- MODIFICADO -->
+            <div id="winEmojiDisplay" class="text-6xl mb-4">🎉</div>
             <p class="text-4xl font-['Fredoka_One'] text-pink-500 mb-2">PARABÉNS!</p>
             <p id="winMessage" class="text-2xl text-gray-600 font-bold mb-6">Você escreveu LAVINE!</p>
             
@@ -169,8 +169,8 @@
 
     <script>
         const defaultName = ['L', 'A', 'V', 'I', 'N', 'E'];
-        let targetName = [...defaultName]; // Agora é dinâmico
-        let currentEmoji = '👧🏻'; // Emoji atual (começa com Lavine)
+        let targetName = [...defaultName];
+        let currentEmoji = '👧🏻'; 
 
         const colors = [
             'bg-pink-500', 'bg-purple-500', 'bg-indigo-500', 
@@ -236,25 +236,30 @@
 
         // --- LÓGICA DO JOGO ---
 
+        // MUDANÇA: Removido requestAnimationFrame duplo, substituído por setTimeout
         function startGame() {
             initAudio();
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
             
-            // Garante que o layout foi pintado ANTES de medir a play-area
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    resetGame(true); // Começa com o nome padrão
-                    speak("Onde está a letra L?");
-                });
-            });
+            // Espera 100ms. Isso é crucial em celulares para garantir que o 
+            // layout (especialmente o h-[100dvh]) foi calculado
+            // antes de medirmos a 'play-area'.
+            setTimeout(() => {
+                resetGame(true); // Começa com o nome padrão
+                speak("Onde está a letra L?");
+            }, 100);
         }
 
-        // NOVA FUNÇÃO: Encontra uma posição segura (anti-sobreposição)
+        // Encontra uma posição segura (anti-sobreposição)
         function findSafePosition(placedRects, containerRect, elSize) {
             const margin = 10;
-            const maxX = containerRect.width - elSize - margin;
-            const maxY = containerRect.height - elSize - margin;
+            // Verifica se containerRect tem dimensões válidas
+            const validWidth = containerRect.width || window.innerWidth;
+            const validHeight = containerRect.height || window.innerHeight;
+
+            const maxX = validWidth - elSize - margin;
+            const maxY = validHeight - elSize - margin;
 
             let newRect;
             let isOverlapping = true;
@@ -262,6 +267,7 @@
 
             while (isOverlapping && attempts < 50) {
                 attempts++;
+                // Garante que maxX e maxY não sejam negativos
                 const x = Math.floor(Math.random() * (maxX > 0 ? maxX : 1)) + margin/2;
                 const y = Math.floor(Math.random() * (maxY > 0 ? maxY : 1)) + margin/2;
                 
@@ -275,7 +281,6 @@
                     }
                 }
             }
-            // Pode retornar undefined se falhar 50x, mas é raro
             if (attempts >= 50) { 
                 console.warn("Não foi possível encontrar posição segura. Pode sobrepor.");
                 if (!newRect) newRect = { x: margin, y: margin, width: elSize, height: elSize }; // Fallback
@@ -283,24 +288,23 @@
             return newRect; // Retorna { x, y, width, height }
         }
 
-        // NOVA FUNÇÃO: Reposiciona bolhas existentes (ex: ao girar a tela)
+        // Reposiciona bolhas existentes (ex: ao girar a tela)
         function repositionBubbles() {
             const playArea = document.getElementById('play-area');
             if (!playArea) return;
             
             const containerRect = playArea.getBoundingClientRect();
-            if (containerRect.width === 0 || containerRect.height === 0) return; // Não faz nada se área não for visível
+            // Se a área não for visível, não faz nada
+            if (containerRect.width === 0 || containerRect.height === 0) return; 
 
             const bubbles = document.querySelectorAll('.letter-bubble');
             const placedRects = [];
             const elSize = window.innerWidth < 640 ? 65 : 100;
 
             bubbles.forEach(bubble => {
-                // Encontra uma nova posição segura
                 const newRect = findSafePosition(placedRects, containerRect, elSize);
                 if (newRect) {
                     placedRects.push(newRect);
-                    // Aplica a nova posição
                     bubble.style.left = `${newRect.x}px`;
                     bubble.style.top = `${newRect.y}px`;
                 }
@@ -327,29 +331,31 @@
             targetName.forEach((char, index) => {
                 const slot = document.createElement('div');
                 slot.id = `slot-${index}`;
-                // Tamanhos responsivos (w-10 é 2.5rem, menor que w-11)
                 slot.className = `letter-slot w-10 h-14 md:w-16 md:h-20 border-4 border-dashed border-gray-400 rounded-xl flex items-center justify-center text-3xl md:text-5xl text-gray-400`;
                 slotsContainer.appendChild(slot);
             });
 
-            // --- LÓGICA DE POSICIONAMENTO ANTI-SOBREPOSIÇÃO ---
+            // --- LÓGICA DE POSICIONAMENTO ---
             const placedRects = [];
             const elSize = window.innerWidth < 640 ? 65 : 100;
             const containerRect = playArea.getBoundingClientRect();
-            const margin = 10;
-            const maxX = containerRect.width - elSize - margin;
-            const maxY = containerRect.height - elSize - margin;
 
-            // Criar Letras dinamicamente
+            // Fallback caso getBoundingClientRect falhe (ex: tela oculta)
+            if(containerRect.width === 0 || containerRect.height === 0) {
+                 console.error("Erro: Área de jogo não visível para medição.");
+                 // Tenta de novo em 100ms
+                 setTimeout(() => resetGame(useDefaultName), 100);
+                 return; 
+            }
+
             let lettersData = targetName.map((char, i) => ({ 
                 char, 
-                color: colors[i % colors.length] // Usa módulo para não estourar array de cores
+                color: colors[i % colors.length]
             }));
             lettersData.sort(() => Math.random() - 0.5);
 
             lettersData.forEach((item) => {
                 
-                // Encontra uma posição que não sobreponha
                 const newRect = findSafePosition(placedRects, containerRect, elSize);
                 placedRects.push(newRect);
 
@@ -361,7 +367,6 @@
                 bubble.style.height = `${elSize}px`;
                 bubble.style.fontSize = window.innerWidth < 640 ? '2.5rem' : '4rem';
                 
-                // Aplica a posição encontrada
                 bubble.style.left = `${newRect.x}px`;
                 bubble.style.top = `${newRect.y}px`;
                 bubble.style.animationDelay = `-${Math.random() * 5}s`;
@@ -369,13 +374,12 @@
                 bubble.onclick = (e) => handleInput(item.char, bubble, item.color, e);
                 
                 playArea.appendChild(bubble);
-                // REMOVIDO: setRandomPosition(bubble, playArea);
             });
 
             updateGameState();
         }
 
-        // Nova função para checar sobreposição de retângulos (com padding)
+        // Checa sobreposição
         function isOverlappingRects(rect1, rect2, padding = 0) {
             return (
                 rect1.x < rect2.x + rect2.width + padding &&
@@ -384,8 +388,6 @@
                 rect1.y + rect1.height + padding > rect2.y
             );
         }
-
-        /* REMOVIDA: function setRandomPosition(element, container) { ... } */
 
         function updateGameState() {
             document.querySelectorAll('.letter-slot').forEach((el, idx) => {
@@ -397,7 +399,6 @@
                 }
             });
 
-            // Atualiza o emoji e a letra
             document.getElementById('target-emoji-display').textContent = currentEmoji;
             if (currentStep < targetName.length) {
                 const letter = targetName[currentStep];
@@ -450,8 +451,8 @@
                 // --- ERROU ---
                 if (navigator.vibrate) navigator.vibrate(50);
                 
-                speak(char);
-                setTimeout(() => playErrorSound(), 400);
+                speak(char); // Fala a letra errada
+                setTimeout(() => playErrorSound(), 400); // Toca som de erro
 
                 element.classList.remove('shake');
                 void element.offsetWidth; 
@@ -469,11 +470,10 @@
             speak(`Muito bem! Você escreveu ${word}!`);
             playSuccessSound();
             
-            document.getElementById('winEmojiDisplay').textContent = currentEmoji; // Mostra emoji na vitória
+            document.getElementById('winEmojiDisplay').textContent = currentEmoji;
             document.getElementById('winMessage').textContent = `Você escreveu ${word}!`;
             document.getElementById('winScreen').classList.remove('hidden');
             
-            // Confete final
             const duration = 3000;
             const end = Date.now() + duration;
             (function frame() {
@@ -489,11 +489,16 @@
             }());
         }
 
+        // MUDANÇA: Lógica de "debounce" para o resize.
+        // Evita que a função rode 100x ao girar a tela, rodando só uma vez no final.
+        let resizeTimer;
         window.addEventListener('resize', () => {
-            // Chama a nova função de reposicionamento
-            if (!document.getElementById('gameArea').classList.contains('hidden')) {
-                 repositionBubbles(); 
-            }
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (!document.getElementById('gameArea').classList.contains('hidden')) {
+                     repositionBubbles(); 
+                }
+            }, 150);
         });
 
         // --- INTEGRAÇÃO GEMINI API ---
@@ -510,13 +515,11 @@
             }
         }
 
-        // Função de backoff exponencial para chamadas de API
         async function fetchWithBackoff(url, options, retries = 3, delay = 1000) {
             try {
                 const response = await fetch(url, options);
                 if (!response.ok) {
                     if (response.status === 429 && retries > 0) {
-                        // Throttling, espera e tenta de novo
                         await new Promise(resolve => setTimeout(resolve, delay));
                         return fetchWithBackoff(url, options, retries - 1, delay * 2);
                     }
@@ -535,13 +538,11 @@
         async function getNewWords() {
             showLoading(true);
             
-            const apiKey = ""; // Deixe em branco, será fornecido pelo ambiente
+            const apiKey = ""; 
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-            // Prompt para a IA (agora pede emoji)
             const prompt = "Gere 3 objetos em português, simples, de 3 a 5 letras, para uma criança de 3 anos. Para CADA objeto, forneça a palavra (ex: BOLA, GATO, SOL) e um único emoji que o represente (ex: ⚽, 🐈, ☀️). Use apenas letras maiúsculas. Evite acentos e Ç.";
 
-            // Schema para garantir a resposta em JSON (agora pede emoji)
             const schema = {
                 type: "OBJECT",
                 properties: {
@@ -565,7 +566,7 @@
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    temperature: 1.0, // Criativo
+                    temperature: 1.0, 
                 }
             };
 
@@ -580,19 +581,17 @@
                     const jsonText = result.candidates[0].content.parts[0].text;
                     const { objetos } = JSON.parse(jsonText);
                     
-                    // Pega um item aleatório (palavra + emoji) da lista
                     const randomItem = objetos[Math.floor(Math.random() * objetos.length)];
                     const newWord = randomItem.palavra.toUpperCase();
                     const newEmoji = randomItem.emoji;
                     
-                    // Define a nova palavra e emoji
                     targetName = newWord.split('');
                     currentEmoji = newEmoji;
                     
-                    resetGame(false); // false = não usar "LAVINE"
+                    resetGame(false); 
                     
                     showLoading(false);
-                    // MODIFICADO: Falar a palavra inteira, e não mais soletrar
+                    // Fala a palavra inteira
                     speak(`Vamos aprender a palavra ${newWord}`);
 
                 } else {
@@ -602,7 +601,6 @@
             } catch (error) {
                 console.error("Erro ao chamar Gemini API:", error);
                 showLoading(true, "Oops! Erro. Tente de novo.");
-                // Esconde a mensagem de erro depois de 2s
                 setTimeout(() => showLoading(false), 2000);
             }
         }
