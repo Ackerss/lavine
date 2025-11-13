@@ -100,7 +100,6 @@
         }
     </style>
 </head>
-<!-- MUDANÇA: h-screen para h-[100dvh] (Dynamic Viewport Height) -->
 <body class="h-[100dvh] w-screen flex flex-col items-center justify-center">
 
     <!-- Tela Inicial -->
@@ -116,7 +115,7 @@
         </button>
     </div>
 
-    <!-- Área do Jogo (h-full agora preenche h-[100dvh] do body) -->
+    <!-- Área do Jogo -->
     <div id="gameArea" class="w-full h-full flex flex-col hidden relative">
         
         <!-- Cabeçalho -->
@@ -149,7 +148,7 @@
             <p class="text-4xl font-['Fredoka_One'] text-pink-500 mb-2">PARABÉNS!</p>
             <p id="winMessage" class="text-2xl text-gray-600 font-bold mb-6">Você escreveu LAVINE!</p>
             
-            <!-- Botão Gemini -->
+            <!-- Botão Offline -->
                 <button id="geminiButton" onclick="getNewWords()" class="w-full px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white text-2xl rounded-2xl shadow-lg active:scale-95 font-bold flex items-center justify-center gap-2 transition-all transform hover:scale-105">
                     ✨ Aprender palavra nova
                 </button>
@@ -160,10 +159,10 @@
             </div>
         </div>
 
-        <!-- Tela de Loading -->
+        <!-- Tela de Loading (Reutilizada para transição) -->
         <div id="loadingOverlay" class="hidden absolute inset-0 flex-col items-center justify-center text-white text-2xl font-bold">
             <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-white mb-4"></div>
-            <p id="loadingText">✨ Buscando uma palavra nova...</p>
+            <p id="loadingText">Buscando nova palavra...</p>
         </div>
     </div>
 
@@ -236,25 +235,19 @@
 
         // --- LÓGICA DO JOGO ---
 
-        // MUDANÇA: Removido requestAnimationFrame duplo, substituído por setTimeout
         function startGame() {
             initAudio();
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
             
-            // Espera 100ms. Isso é crucial em celulares para garantir que o 
-            // layout (especialmente o h-[100dvh]) foi calculado
-            // antes de medirmos a 'play-area'.
             setTimeout(() => {
                 resetGame(true); // Começa com o nome padrão
                 speak("Onde está a letra L?");
             }, 100);
         }
 
-        // Encontra uma posição segura (anti-sobreposição)
         function findSafePosition(placedRects, containerRect, elSize) {
             const margin = 10;
-            // Verifica se containerRect tem dimensões válidas
             const validWidth = containerRect.width || window.innerWidth;
             const validHeight = containerRect.height || window.innerHeight;
 
@@ -267,7 +260,6 @@
 
             while (isOverlapping && attempts < 50) {
                 attempts++;
-                // Garante que maxX e maxY não sejam negativos
                 const x = Math.floor(Math.random() * (maxX > 0 ? maxX : 1)) + margin/2;
                 const y = Math.floor(Math.random() * (maxY > 0 ? maxY : 1)) + margin/2;
                 
@@ -275,7 +267,7 @@
                 
                 isOverlapping = false;
                 for (const rect of placedRects) {
-                    if (isOverlappingRects(newRect, rect, 10)) { // 10px de padding
+                    if (isOverlappingRects(newRect, rect, 10)) { 
                         isOverlapping = true;
                         break;
                     }
@@ -285,16 +277,14 @@
                 console.warn("Não foi possível encontrar posição segura. Pode sobrepor.");
                 if (!newRect) newRect = { x: margin, y: margin, width: elSize, height: elSize }; // Fallback
             }
-            return newRect; // Retorna { x, y, width, height }
+            return newRect;
         }
 
-        // Reposiciona bolhas existentes (ex: ao girar a tela)
         function repositionBubbles() {
             const playArea = document.getElementById('play-area');
             if (!playArea) return;
             
             const containerRect = playArea.getBoundingClientRect();
-            // Se a área não for visível, não faz nada
             if (containerRect.width === 0 || containerRect.height === 0) return; 
 
             const bubbles = document.querySelectorAll('.letter-bubble');
@@ -327,7 +317,6 @@
             const bubbles = playArea.querySelectorAll('.letter-bubble');
             bubbles.forEach(b => b.remove());
 
-            // Criar Slots dinamicamente
             targetName.forEach((char, index) => {
                 const slot = document.createElement('div');
                 slot.id = `slot-${index}`;
@@ -335,15 +324,12 @@
                 slotsContainer.appendChild(slot);
             });
 
-            // --- LÓGICA DE POSICIONAMENTO ---
             const placedRects = [];
             const elSize = window.innerWidth < 640 ? 65 : 100;
             const containerRect = playArea.getBoundingClientRect();
 
-            // Fallback caso getBoundingClientRect falhe (ex: tela oculta)
             if(containerRect.width === 0 || containerRect.height === 0) {
                  console.error("Erro: Área de jogo não visível para medição.");
-                 // Tenta de novo em 100ms
                  setTimeout(() => resetGame(useDefaultName), 100);
                  return; 
             }
@@ -379,7 +365,6 @@
             updateGameState();
         }
 
-        // Checa sobreposição
         function isOverlappingRects(rect1, rect2, padding = 0) {
             return (
                 rect1.x < rect2.x + rect2.width + padding &&
@@ -451,8 +436,8 @@
                 // --- ERROU ---
                 if (navigator.vibrate) navigator.vibrate(50);
                 
-                speak(char); // Fala a letra errada
-                setTimeout(() => playErrorSound(), 400); // Toca som de erro
+                speak(char); 
+                setTimeout(() => playErrorSound(), 400); 
 
                 element.classList.remove('shake');
                 void element.offsetWidth; 
@@ -489,8 +474,6 @@
             }());
         }
 
-        // MUDANÇA: Lógica de "debounce" para o resize.
-        // Evita que a função rode 100x ao girar a tela, rodando só uma vez no final.
         let resizeTimer;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimer);
@@ -501,9 +484,64 @@
             }, 150);
         });
 
-        // --- INTEGRAÇÃO GEMINI API ---
+        // --- LÓGICA OFFLINE (SEM API) ---
 
-        function showLoading(isLoading, message = "✨ Buscando uma palavra nova...") {
+        const wordList = [
+            { palavra: "SOL", emoji: "☀️" },
+            { palavra: "LUA", emoji: "🌙" },
+            { palavra: "MAR", emoji: "🌊" },
+            { palavra: "CEU", emoji: "☁️" },
+            { palavra: "PAO", emoji: "🍞" },
+            { palavra: "OVO", emoji: "🥚" },
+            { palavra: "MAE", emoji: "👩‍👧" },
+            { palavra: "PAI", emoji: "👨‍👧" },
+            { palavra: "UVA", emoji: "🍇" },
+            { palavra: "REI", emoji: "👑" },
+            { palavra: "SAL", emoji: "🧂" },
+            { palavra: "DEZ", emoji: "🔟" },
+            { palavra: "BOLA", emoji: "⚽" },
+            { palavra: "GATO", emoji: "🐈" },
+            { palavra: "SAPO", emoji: "🐸" },
+            { palavra: "RATO", emoji: "🐭" },
+            { palavra: "PATO", emoji: "🦆" },
+            { palavra: "BOCA", emoji: "👄" },
+            { palavra: "OLHO", emoji: "👀" },
+            { palavra: "MAO", emoji: "✋" },
+            { palavra: "PIPA", emoji: "🪁" },
+            { palavra: "DADO", emoji: "🎲" },
+            { palavra: "DOCE", emoji: "🍬" },
+            { palavra: "BEBE", emoji: "👶" },
+            { palavra: "NAVE", emoji: "🚀" },
+            { palavra: "MESA", emoji: "🪑" },
+            { palavra: "CAMA", emoji: "🛏️" },
+            { palavra: "COPO", emoji: "🥛" },
+            { palavra: "BOLO", emoji: "🍰" },
+            { palavra: "FOGO", emoji: "🔥" },
+            { palavra: "FLOR", emoji: "🌸" },
+            { palavra: "CASA", emoji: "🏡" },
+            { palavra: "PERA", emoji: "🍐" },
+            { palavra: "MACA", emoji: "🍎" },
+            { palavra: "SUCO", emoji: "🧃" },
+            { palavra: "BOTA", emoji: "👢" },
+            { palavra: "MEIA", emoji: "🧦" },
+            { palavra: "LUVA", emoji: "🧤" },
+            { palavra: "REDE", emoji: "🕸️" },
+            { palavra: "PEIXE", emoji: "🐟" },
+            { palavra: "LEAO", emoji: "🦁" },
+            { palavra: "TIGRE", emoji: "🐅" },
+            { palavra: "CHAVE", emoji: "🔑" },
+            { palavra: "NAVIO", emoji: "🚢" },
+            { palavra: "TREM", emoji: "🚂" },
+            { palavra: "LIVRO", emoji: "📚" },
+            { palavra: "BANANA", emoji: "🍌" },
+            { palavra: "CARRO", emoji: "🚗" },
+            { palavra: "MOTO", emoji: "🏍️" },
+            { palavra: "CORUJA", emoji: "🦉" }
+        ];
+
+        let lastWordIndex = -1; // Para evitar repetir a palavra
+
+        function showLoading(isLoading, message = "Buscando nova palavra...") {
             const overlay = document.getElementById('loadingOverlay');
             document.getElementById('loadingText').textContent = message;
             if (isLoading) {
@@ -515,94 +553,34 @@
             }
         }
 
-        async function fetchWithBackoff(url, options, retries = 3, delay = 1000) {
-            try {
-                const response = await fetch(url, options);
-                if (!response.ok) {
-                    if (response.status === 429 && retries > 0) {
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        return fetchWithBackoff(url, options, retries - 1, delay * 2);
-                    }
-                    throw new Error(`Erro na API: ${response.statusText}`);
-                }
-                return response.json();
-            } catch (error) {
-                if (retries > 0) {
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    return fetchWithBackoff(url, options, retries - 1, delay * 2);
-                }
-                throw error;
-            }
-        }
+        // Nova função getNewWords (substitui a versão com API)
+        function getNewWords() {
+            showLoading(true, "Buscando nova palavra...");
 
-        async function getNewWords() {
-            showLoading(true);
-            
-            const apiKey = ""; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-            const prompt = "Gere 3 objetos em português, simples, de 3 a 5 letras, para uma criança de 3 anos. Para CADA objeto, forneça a palavra (ex: BOLA, GATO, SOL) e um único emoji que o represente (ex: ⚽, 🐈, ☀️). Use apenas letras maiúsculas. Evite acentos e Ç.";
-
-            const schema = {
-                type: "OBJECT",
-                properties: {
-                    "objetos": {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "palavra": { "type": "STRING" },
-                                "emoji": { "type": "STRING" }
-                            },
-                            required: ["palavra", "emoji"]
-                        }
-                    }
-                },
-                required: ["objetos"]
-            };
-
-            const payload = {
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: schema,
-                    temperature: 1.0, 
-                }
-            };
-
-            try {
-                const result = await fetchWithBackoff(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+            // Simula um pequeno "loading" para a transição ficar suave
+            setTimeout(() => {
+                let newIndex = -1;
+                // Sorteia um índice que não seja igual ao último usado
+                do {
+                    newIndex = Math.floor(Math.random() * wordList.length);
+                } while (wordList.length > 1 && newIndex === lastWordIndex); 
                 
-                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0].text) {
-                    const jsonText = result.candidates[0].content.parts[0].text;
-                    const { objetos } = JSON.parse(jsonText);
-                    
-                    const randomItem = objetos[Math.floor(Math.random() * objetos.length)];
-                    const newWord = randomItem.palavra.toUpperCase();
-                    const newEmoji = randomItem.emoji;
-                    
-                    targetName = newWord.split('');
-                    currentEmoji = newEmoji;
-                    
-                    resetGame(false); 
-                    
-                    showLoading(false);
-                    // Fala a palavra inteira
-                    speak(`Vamos aprender a palavra ${newWord}`);
+                lastWordIndex = newIndex;
+                
+                const randomItem = wordList[newIndex];
+                
+                const newWord = randomItem.palavra.toUpperCase();
+                const newEmoji = randomItem.emoji;
+                
+                targetName = newWord.split('');
+                currentEmoji = newEmoji;
+                
+                resetGame(false); 
+                
+                showLoading(false);
+                speak(`Vamos aprender a palavra ${newWord}`);
 
-                } else {
-                    throw new Error("Resposta da API inválida.");
-                }
-
-            } catch (error) {
-                console.error("Erro ao chamar Gemini API:", error);
-                showLoading(true, "Oops! Erro. Tente de novo.");
-                setTimeout(() => showLoading(false), 2000);
-            }
+            }, 500); // 500ms de "loading"
         }
     </script>
 </body>
